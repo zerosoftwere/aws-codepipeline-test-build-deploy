@@ -1,0 +1,28 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    on-failure: ABORT
+    commands:
+    - echo 'Installing dependencies...'
+    - pip install -r requirements.txt
+    finally:
+    - echo 'Dependencies installed succefully'
+  build:
+    on-failure: ABORT
+    commands:
+    - echo 'Running test...'
+    - python -m pytest
+    finally:
+    - echo 'Test completed succefully'
+cache:
+  paths:
+  - '$HOME/.cache/pip/'
+reports:
+  pytest_reports:
+    files:
+    - report.xml
+    base-directory: test_report
+    file-format: JUNITXML
