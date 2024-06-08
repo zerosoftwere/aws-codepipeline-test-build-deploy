@@ -26,3 +26,9 @@ reports:
     - report.xml
     base-directory: test_report
     file-format: JUNITXML
+artifacts:
+  files:
+  - '**/*'
+  exclude-paths:
+  - test_report/**/*
+  - tests/**/*
