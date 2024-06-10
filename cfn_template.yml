@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Specify the VPC id to launch the EC2 instance in
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Specify the subnet to launch the EC2 instance in
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Specify the SSH Key for the instance
+    ConstraintDescription: The key name cannot be changed after deployment
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: Specify the EC2 image id
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64
+  InstanceType:
+    Type: String
+    Description: Specify the EC2 instance type
+    Default: t4g.nano
+    AllowedValues:
+    - t4g.nano
+    - t4g.micro
+    - t4g.small
+    - t4g.medium
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Codepipline test environment security group
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        CidrIp: 0.0.0.0/0
+  
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DemoCodepipelineRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - sts:AssumeRole
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: DemoCodePipeline
+      Roles:
+      - !Ref InstanceRole
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref ImageId
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds:
+      - !Ref SecurityGroup
+      Tags:
+      - Key: Name
+        Value: webserver
+      UserData: 
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource Instance --region ${AWS::Region} >> /var/log/cfn-init.log 2>&1
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Instance --region ${AWS::Region}
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+          - setup
+        setup:
+          packages:
+            yum:
+              docker: []
+              nginx: []
+          services:
+            sysvinit:
+              docker:
+                enabled: true
+                ensureRunning: true
+              nginx:
+                enabled: true
+                ensureRunning: true
+          commands:
+            add_user_to_docker_group:
+              command: usermod -aG docker ec2-user
+Outputs:
+  MyInstanceId:
+    Description: Instance id
+    Value: !Ref Instance
+  MyInstanceIp:
+    Description: Instance public ip
+    Value: !GetAtt Instance.PublicIp
