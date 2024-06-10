@@ -10,7 +10,7 @@ def hello():
 
 @application.get('/health')
 def health():
-    return jsonify({'status': 'UP'})
+    return jsonify({'status': 'UP'}), 201
 
 @application.get('/')
 def index():
